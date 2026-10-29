@@ -324,17 +324,44 @@ export const SavedTab: React.FC<SavedTabProps> = ({
         </button>
       </div>
 
-      {/* 5. iPhone PWA 安裝指南 */}
-      <div className="bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-200/60 dark:border-blue-900/40 p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Smartphone className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-          <h4 className="text-xs font-bold text-blue-900 dark:text-blue-200">iPhone PWA 體驗優化</h4>
+      {/* 5. iPhone PWA 安裝指南與強制更新 */}
+      <div className="bg-blue-50/60 dark:bg-blue-950/30 rounded-2xl border border-blue-200/60 dark:border-blue-900/40 p-4 space-y-3">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <Smartphone className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h4 className="text-xs font-bold text-blue-900 dark:text-blue-200">
+              iPhone PWA 體驗優化與版本刷新
+            </h4>
+          </div>
+          <p className="text-xs text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
+            若電腦顯示正常但手機仍顯示舊版畫面或舊資料（因 iPhone PWA 會快取舊版程式），可點擊下方按鈕強制拉取最新版本。
+          </p>
         </div>
-        <p className="text-xs text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
-          建議使用 Safari 瀏覽器打開本程式，點選底部分享按鈕並選擇「加入主畫面」，即可享有全螢幕獨立視窗、極速啟動以及無縫地圖返回防白屏體驗。
-        </p>
-        <div className="mt-3">
+
+        <div className="flex flex-wrap items-center gap-2">
           <PWAInstallGuide />
+          <button
+            type="button"
+            onClick={async () => {
+              onNotify('正在清除舊版 PWA 快取並更新至最新版本...');
+              try {
+                if ('serviceWorker' in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(regs.map((r) => r.unregister()));
+                }
+                if ('caches' in window) {
+                  const keys = await caches.keys();
+                  await Promise.all(keys.map((k) => caches.delete(k)));
+                }
+              } catch {
+                // ignore
+              }
+              window.location.reload();
+            }}
+            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition active:scale-95"
+          >
+            強制更新至最新 App 版本
+          </button>
         </div>
       </div>
     </div>

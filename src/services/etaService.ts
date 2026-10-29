@@ -40,11 +40,11 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
 
   try {
     if (route.operator === 'KMB') {
-      // Query Official KMB ETA API directly from browser
+      // Query Official KMB ETA API directly from browser (bypass iOS HTTP cache)
       const kmbUrl = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${originStop.stopId}/${route.routeNumber}/${route.serviceType || '1'}`;
 
       const fetchPromises: Promise<void>[] = [
-        fetch(kmbUrl, { signal: AbortSignal.timeout(5000) })
+        fetch(kmbUrl, { cache: 'no-store', signal: AbortSignal.timeout(6000) })
           .then((r) => (r.ok ? r.json() : { data: [] }))
           .then(async (json) => {
             let items: any[] = Array.isArray(json.data) ? json.data : [];
@@ -55,7 +55,7 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
               try {
                 const stopEtaRes = await fetch(
                   `https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${originStop.stopId}`,
-                  { signal: AbortSignal.timeout(4500) }
+                  { cache: 'no-store', signal: AbortSignal.timeout(5000) }
                 );
                 if (stopEtaRes.ok) {
                   const stopEtaJson = await stopEtaRes.json();
@@ -111,7 +111,7 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
       if (route.jointOperator === 'CTB' && originStop.ctbStopId) {
         const ctbUrl = `https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/${originStop.ctbStopId}/${route.routeNumber}`;
         fetchPromises.push(
-          fetch(ctbUrl, { signal: AbortSignal.timeout(5000) })
+          fetch(ctbUrl, { cache: 'no-store', signal: AbortSignal.timeout(6000) })
             .then((r) => (r.ok ? r.json() : { data: [] }))
             .then((json) => {
               if (!Array.isArray(json.data)) return;
@@ -147,7 +147,7 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
       await Promise.all(fetchPromises);
     } else if (route.operator === 'CTB') {
       const ctbUrl = `https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/${originStop.stopId}/${route.routeNumber}`;
-      const res = await fetch(ctbUrl, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(ctbUrl, { cache: 'no-store', signal: AbortSignal.timeout(6000) });
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json.data)) {
@@ -178,7 +178,7 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
       if (route.gtfsId) {
         const routeSeq = route.direction === 'I' ? 2 : 1;
         const gmbUrl = `https://data.etagmb.gov.hk/eta/route-stop/${route.gtfsId}/${routeSeq}/${originStop.seq}`;
-        const res = await fetch(gmbUrl, { signal: AbortSignal.timeout(4500) });
+        const res = await fetch(gmbUrl, { cache: 'no-store', signal: AbortSignal.timeout(6000) });
         if (res.ok) {
           const json = await res.json();
           const etaArray = Array.isArray(json.data)
@@ -204,7 +204,7 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
       }
     } else if (route.operator === 'NLB' && route.nlbId) {
       const nlbUrl = `https://rt.data.gov.hk/v2/transport/nlb/stop.php?action=estimatedArrivals&routeId=${route.nlbId}&stopId=${originStop.stopId}&language=zh`;
-      const res = await fetch(nlbUrl, { signal: AbortSignal.timeout(4500) });
+      const res = await fetch(nlbUrl, { cache: 'no-store', signal: AbortSignal.timeout(6000) });
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json.estimatedArrivals)) {
