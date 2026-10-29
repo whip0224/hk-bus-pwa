@@ -47,8 +47,6 @@ export const SearchTab: React.FC<SearchTabProps> = ({
 
   const [originSuggestions, setOriginSuggestions] = useState<LocationPoint[]>([]);
   const [destSuggestions, setDestSuggestions] = useState<LocationPoint[]>([]);
-  const [loadingOriginGeo, setLoadingOriginGeo] = useState(false);
-  const [loadingDestGeo, setLoadingDestGeo] = useState(false);
   const [locatingGPS, setLocatingGPS] = useState(false);
 
   const [savedDests, setSavedDests] = useState<SavedDestination[]>([]);
@@ -57,19 +55,27 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   const originTimer = useRef<NodeJS.Timeout | null>(null);
   const destTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Track Chinese IME composition & focus state so typing never flickers or interrupts input
+  const isComposingOriginRef = useRef(false);
+  const isComposingDestRef = useRef(false);
+  const isOriginFocusedRef = useRef(false);
+  const isDestFocusedRef = useRef(false);
+
   useEffect(() => {
     setSavedDests(getSavedDestinations());
   }, []);
 
   useEffect(() => {
-    if (origin) {
+    if (origin && !isOriginFocusedRef.current) {
       setOriginText(origin.name);
     }
   }, [origin]);
 
   useEffect(() => {
     if (dest) {
-      setDestText(dest.name);
+      if (!isDestFocusedRef.current) {
+        setDestText(dest.name);
+      }
       const saved = getSavedDestinations();
       setIsDestSaved(saved.some((d) => d.name === dest.name));
     } else {
@@ -77,13 +83,43 @@ export const SearchTab: React.FC<SearchTabProps> = ({
     }
   }, [dest]);
 
-  // Immediately sync typed text to parent state and auto-resolve best fuzzy coordinate match
+  const scheduleOriginLookup = (rawVal: string) => {
+    if (originTimer.current) clearTimeout(originTimer.current);
+    const trimmed = rawVal.trim();
+    if (!trimmed) {
+      setOriginSuggestions([]);
+      return;
+    }
+
+    originTimer.current = setTimeout(async () => {
+      if (isComposingOriginRef.current) return;
+      const res = await searchLocations(trimmed);
+      setOriginSuggestions(res);
+    }, 450);
+  };
+
+  const scheduleDestLookup = (rawVal: string) => {
+    if (destTimer.current) clearTimeout(destTimer.current);
+    const trimmed = rawVal.trim();
+    if (!trimmed) {
+      setDestSuggestions([]);
+      return;
+    }
+
+    destTimer.current = setTimeout(async () => {
+      if (isComposingDestRef.current) return;
+      const res = await searchLocations(trimmed);
+      setDestSuggestions(res);
+    }, 450);
+  };
+
   const handleOriginChange = (val: string) => {
     setOriginText(val);
     const trimmed = val.trim();
     if (!trimmed) {
       onOriginChange(null);
       setOriginSuggestions([]);
+      if (originTimer.current) clearTimeout(originTimer.current);
       return;
     }
 
@@ -94,23 +130,10 @@ export const SearchTab: React.FC<SearchTabProps> = ({
       source: 'manual',
     });
 
-    if (originTimer.current) clearTimeout(originTimer.current);
-    originTimer.current = setTimeout(async () => {
-      setLoadingOriginGeo(true);
-      const res = await searchLocations(trimmed);
-      setOriginSuggestions(res);
-      if (res.length > 0) {
-        // Automatically attach the closest fuzzy-matched coordinates so pressing Search never fails
-        onOriginChange({
-          name: trimmed,
-          address: res[0].address || res[0].name,
-          lat: res[0].lat,
-          lng: res[0].lng,
-          source: res[0].source,
-        });
-      }
-      setLoadingOriginGeo(false);
-    }, 200);
+    // Only run autocomplete lookup when not mid-composition in Chinese IME
+    if (!isComposingOriginRef.current) {
+      scheduleOriginLookup(val);
+    }
   };
 
   const handleDestChange = (val: string) => {
@@ -119,6 +142,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
     if (!trimmed) {
       onDestChange(null);
       setDestSuggestions([]);
+      if (destTimer.current) clearTimeout(destTimer.current);
       return;
     }
 
@@ -129,23 +153,9 @@ export const SearchTab: React.FC<SearchTabProps> = ({
       source: 'manual',
     });
 
-    if (destTimer.current) clearTimeout(destTimer.current);
-    destTimer.current = setTimeout(async () => {
-      setLoadingDestGeo(true);
-      const res = await searchLocations(trimmed);
-      setDestSuggestions(res);
-      if (res.length > 0) {
-        // Automatically attach the closest fuzzy-matched coordinates so pressing Search never fails
-        onDestChange({
-          name: trimmed,
-          address: res[0].address || res[0].name,
-          lat: res[0].lat,
-          lng: res[0].lng,
-          source: res[0].source,
-        });
-      }
-      setLoadingDestGeo(false);
-    }, 200);
+    if (!isComposingDestRef.current) {
+      scheduleDestLookup(val);
+    }
   };
 
   const handleUseCurrentLocation = async () => {
@@ -229,6 +239,8 @@ export const SearchTab: React.FC<SearchTabProps> = ({
   };
 
   const handleTriggerSearch = () => {
+    if (originTimer.current) clearTimeout(originTimer.current);
+    if (destTimer.current) clearTimeout(destTimer.current);
     setOriginSuggestions([]);
     setDestSuggestions([]);
     onExecuteSearch();
@@ -297,16 +309,40 @@ export const SearchTab: React.FC<SearchTabProps> = ({
               <input
                 type="text"
                 value={originText}
+                onFocus={() => {
+                  isOriginFocusedRef.current = true;
+                }}
+                onBlur={() => {
+                  isOriginFocusedRef.current = false;
+                  // Auto-bind top suggestion on blur if user didn't tap dropdown
+                  if (origin && origin.lat === 0 && originSuggestions.length > 0) {
+                    const top = originSuggestions[0];
+                    onOriginChange({
+                      name: originText.trim() || top.name,
+                      address: top.address || top.name,
+                      lat: top.lat,
+                      lng: top.lng,
+                      source: top.source,
+                    });
+                  }
+                }}
+                onCompositionStart={() => {
+                  isComposingOriginRef.current = true;
+                  if (originTimer.current) clearTimeout(originTimer.current);
+                }}
+                onCompositionEnd={(e) => {
+                  isComposingOriginRef.current = false;
+                  scheduleOriginLookup(e.currentTarget.value);
+                }}
                 onChange={(e) => handleOriginChange(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleTriggerSearch();
+                  if (e.key === 'Enter' && !isComposingOriginRef.current) {
+                    handleTriggerSearch();
+                  }
                 }}
                 placeholder="輸入街道、大廈或地標 (例如：堡壘街 / 嘉華洋樓)"
                 className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white pr-8"
               />
-              {loadingOriginGeo && (
-                <Loader2 className="w-4 h-4 text-blue-500 animate-spin absolute right-8" />
-              )}
               {originText && (
                 <button
                   type="button"
@@ -394,16 +430,39 @@ export const SearchTab: React.FC<SearchTabProps> = ({
                 <input
                   type="text"
                   value={destText}
+                  onFocus={() => {
+                    isDestFocusedRef.current = true;
+                  }}
+                  onBlur={() => {
+                    isDestFocusedRef.current = false;
+                    if (dest && dest.lat === 0 && destSuggestions.length > 0) {
+                      const top = destSuggestions[0];
+                      onDestChange({
+                        name: destText.trim() || top.name,
+                        address: top.address || top.name,
+                        lat: top.lat,
+                        lng: top.lng,
+                        source: top.source,
+                      });
+                    }
+                  }}
+                  onCompositionStart={() => {
+                    isComposingDestRef.current = true;
+                    if (destTimer.current) clearTimeout(destTimer.current);
+                  }}
+                  onCompositionEnd={(e) => {
+                    isComposingDestRef.current = false;
+                    scheduleDestLookup(e.currentTarget.value);
+                  }}
                   onChange={(e) => handleDestChange(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleTriggerSearch();
+                    if (e.key === 'Enter' && !isComposingDestRef.current) {
+                      handleTriggerSearch();
+                    }
                   }}
                   placeholder="輸入街道、大廈或地標 (例如：九龍灣學生健康服務中心)"
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 dark:text-white pr-8"
                 />
-                {loadingDestGeo && (
-                  <Loader2 className="w-4 h-4 text-blue-500 animate-spin absolute right-8" />
-                )}
                 {destText && (
                   <button
                     type="button"
@@ -487,7 +546,7 @@ export const SearchTab: React.FC<SearchTabProps> = ({
         {/* Search Radius Segmented Controller */}
         <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
               車站搜尋範圍 (步行距離)
             </span>
             <span className="text-[11px] text-slate-400">

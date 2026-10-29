@@ -14,6 +14,23 @@
   }
 }
 
+/* iPhone Dynamic Island & Status Bar Safe Area Top Padding */
+.pt-safe-header {
+  padding-top: max(env(safe-area-inset-top, 0px), 14px);
+}
+
+@media all and (display-mode: standalone) {
+  .pt-safe-header {
+    padding-top: max(env(safe-area-inset-top, 54px), 54px);
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  .pt-safe-header {
+    padding-top: max(env(safe-area-inset-top, 48px), 48px);
+  }
+}
+
 /* Hide scrollbars on mobile horizontal carousels */
 .scrollbar-none::-webkit-scrollbar {
   display: none;
