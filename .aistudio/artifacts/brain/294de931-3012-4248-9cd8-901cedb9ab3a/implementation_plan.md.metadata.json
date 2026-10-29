@@ -1,0 +1,6 @@
+{
+  "summary":  "更新定時巴士到站手機通知系統實作計劃：加入 Android (Chrome PWA) 專屬原生通知與背景方案，並改為「目標時間（如 06:30）前兩個班次 + 後兩個班次（共 4 班次時間軸）」的預先採樣與通知機制。",
+  "updatedAt":  "2026-10-29T08:30:13.651954430Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
