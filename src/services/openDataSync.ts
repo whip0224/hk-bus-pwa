@@ -2,7 +2,7 @@ import { RouteDefinition, RouteStop, TransitOperator } from '../types/transit';
 import { PRELOADED_ROUTES } from '../data/hkTransitData';
 import { updateOfflineDbInfo } from './storageService';
 
-const IDB_NAME = 'hk_transit_real_db_v3';
+const IDB_NAME = 'hk_transit_real_db_v4';
 const IDB_STORE = 'dataset';
 const IDB_KEY = 'all_routes';
 
@@ -110,6 +110,7 @@ function parseUnifiedRouteFareList(data: any): { routes: RouteDefinition[]; tota
     let primaryStopIds: string[] = [];
     let ctbPartnerStopIds: string[] | undefined = undefined;
     let rawBound: any = 'O';
+    let rawCtbBound: any = undefined;
 
     if (co.includes('kmb') && Array.isArray(stopsMap.kmb) && stopsMap.kmb.length >= 2) {
       operator = 'KMB';
@@ -118,6 +119,7 @@ function parseUnifiedRouteFareList(data: any): { routes: RouteDefinition[]; tota
       if (co.includes('ctb') && Array.isArray(stopsMap.ctb) && stopsMap.ctb.length > 0) {
         jointOperator = 'CTB';
         ctbPartnerStopIds = stopsMap.ctb;
+        rawCtbBound = typeof entry.bound === 'object' ? entry.bound.ctb : undefined;
       }
     } else if (co.includes('ctb') && Array.isArray(stopsMap.ctb) && stopsMap.ctb.length >= 2) {
       operator = 'CTB';
@@ -142,6 +144,12 @@ function parseUnifiedRouteFareList(data: any): { routes: RouteDefinition[]; tota
     const direction: 'O' | 'I' =
       rawBound === 'I' || rawBound === 'inbound' || String(rawBound).startsWith('I') ? 'I' : 'O';
 
+    const ctbDirection: 'O' | 'I' | undefined = rawCtbBound
+      ? rawCtbBound === 'I' || rawCtbBound === 'inbound' || String(rawCtbBound).startsWith('I')
+        ? 'I'
+        : 'O'
+      : undefined;
+
     const routeStops: RouteStop[] = [];
     for (let i = 0; i < primaryStopIds.length; i++) {
       const sid = primaryStopIds[i];
@@ -154,6 +162,24 @@ function parseUnifiedRouteFareList(data: any): { routes: RouteDefinition[]; tota
       const fareStr = Array.isArray(entry.fares) ? entry.fares[i] : undefined;
       const fare = fareStr ? parseFloat(fareStr) : undefined;
 
+      // Match partner Citybus stop ID by nearest physical coordinates (in case KMB/CTB stop counts differ by 1)
+      let matchedCtbStopId = ctbPartnerStopIds?.[i];
+      if (ctbPartnerStopIds && ctbPartnerStopIds.length > 0) {
+        let bestDistSq = Infinity;
+        for (const cid of ctbPartnerStopIds) {
+          const cInfo = stopList[cid];
+          if (cInfo?.location) {
+            const dLat = Number(cInfo.location.lat) - lat;
+            const dLng = Number(cInfo.location.lng) - lng;
+            const distSq = dLat * dLat + dLng * dLng;
+            if (distSq < bestDistSq) {
+              bestDistSq = distSq;
+              matchedCtbStopId = cid;
+            }
+          }
+        }
+      }
+
       routeStops.push({
         stopId: sid,
         seq: i + 1,
@@ -161,7 +187,7 @@ function parseUnifiedRouteFareList(data: any): { routes: RouteDefinition[]; tota
         lat,
         lng,
         fare: isNaN(fare as number) ? undefined : fare,
-        ctbStopId: ctbPartnerStopIds?.[i],
+        ctbStopId: matchedCtbStopId,
       });
     }
 
@@ -174,6 +200,7 @@ function parseUnifiedRouteFareList(data: any): { routes: RouteDefinition[]; tota
       jointOperator,
       serviceType: String(entry.serviceType || '1'),
       direction,
+      ctbDirection,
       originName: entry.orig?.zh || entry.orig?.tc || entry.orig?.en || routeStops[0].nameTc,
       destName: entry.dest?.zh || entry.dest?.tc || entry.dest?.en || routeStops[routeStops.length - 1].nameTc,
       stops: routeStops,

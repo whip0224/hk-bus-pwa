@@ -34,6 +34,7 @@ export interface RouteDefinition {
   jointOperator?: TransitOperator;
   serviceType: string;
   direction: 'O' | 'I'; // Outbound or Inbound
+  ctbDirection?: 'O' | 'I'; // Partner Citybus direction for joint cross-harbour routes
   originName: string;
   destName: string;
   stops: RouteStop[];

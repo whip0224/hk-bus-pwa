@@ -33,7 +33,7 @@ import { PWAInstallGuide } from './components/PWAInstallGuide';
 
 // Number of nearest routes to fetch ETAs for immediately on search;
 // farther routes are lazy-loaded via IntersectionObserver when scrolled into view.
-const INITIAL_ETA_BATCH_SIZE = 8;
+const INITIAL_ETA_BATCH_SIZE = 16;
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');

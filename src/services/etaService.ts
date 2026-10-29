@@ -44,14 +44,44 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
       const kmbUrl = `https://data.etabus.gov.hk/v1/transport/kmb/eta/${originStop.stopId}/${route.routeNumber}/${route.serviceType || '1'}`;
 
       const fetchPromises: Promise<void>[] = [
-        fetch(kmbUrl, { signal: AbortSignal.timeout(4500) })
+        fetch(kmbUrl, { signal: AbortSignal.timeout(5000) })
           .then((r) => (r.ok ? r.json() : { data: [] }))
-          .then((json) => {
-            if (!Array.isArray(json.data)) return;
-            for (const item of json.data) {
-              if (item.dir && item.dir !== route.direction) continue;
-              if (item.seq && Math.abs(Number(item.seq) - originStop.seq) > 3) continue;
+          .then(async (json) => {
+            let items: any[] = Array.isArray(json.data) ? json.data : [];
 
+            // If specific serviceType returned no active timestamps, fallback to stop-eta for this stop
+            const hasValidTimestamp = items.some((it) => Boolean(it.eta));
+            if (!hasValidTimestamp) {
+              try {
+                const stopEtaRes = await fetch(
+                  `https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/${originStop.stopId}`,
+                  { signal: AbortSignal.timeout(4500) }
+                );
+                if (stopEtaRes.ok) {
+                  const stopEtaJson = await stopEtaRes.json();
+                  if (Array.isArray(stopEtaJson.data)) {
+                    const matchedByRoute = stopEtaJson.data.filter(
+                      (it: any) =>
+                        String(it.route).toUpperCase() === route.routeNumber.toUpperCase() &&
+                        Boolean(it.eta)
+                    );
+                    if (matchedByRoute.length > 0) {
+                      items = matchedByRoute;
+                    }
+                  }
+                }
+              } catch {
+                // ignore fallback error
+              }
+            }
+
+            // Filter by direction if matching entries exist; otherwise accept all entries at this physical roadside stop
+            const dirFiltered = items.filter(
+              (it) => !it.dir || it.dir === route.direction
+            );
+            const candidates = dirFiltered.some((it) => Boolean(it.eta)) ? dirFiltered : items;
+
+            for (const item of candidates) {
               if (item.eta) {
                 const mins = parseMinutesDiff(item.eta);
                 if (mins !== null) {
@@ -60,7 +90,7 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
                     etaTimeStr: formatHHMM(item.eta),
                     remark:
                       item.rmk_tc ||
-                      (route.jointOperator ? '九巴實時' : mins <= 1 ? '正在到站' : '實時GPS'),
+                      (route.jointOperator ? '九巴班次' : mins <= 1 ? '正在到站' : '實時GPS'),
                     isRealTime: true,
                     timestamp: item.eta,
                     operatorLabel: '九巴',
@@ -74,23 +104,34 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
           .catch(() => {}),
       ];
 
-      // If this is a joint KMB+CTB cross-harbour route (e.g. 101, 111, 619, 641), also fetch Citybus ETA!
+      // Joint KMB+CTB cross-harbour routes (e.g. 619, 101, 111, 601, 671):
+      // Note: KMB and CTB often use OPPOSITE bound codes ('O' vs 'I') for the exact same direction!
+      // Since originStop.ctbStopId is already a physical roadside pole for this direction,
+      // do not discard CTB arrivals when item.dir !== route.direction.
       if (route.jointOperator === 'CTB' && originStop.ctbStopId) {
         const ctbUrl = `https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/${originStop.ctbStopId}/${route.routeNumber}`;
         fetchPromises.push(
-          fetch(ctbUrl, { signal: AbortSignal.timeout(4500) })
+          fetch(ctbUrl, { signal: AbortSignal.timeout(5000) })
             .then((r) => (r.ok ? r.json() : { data: [] }))
             .then((json) => {
               if (!Array.isArray(json.data)) return;
-              for (const item of json.data) {
-                if (item.dir && item.dir !== route.direction) continue;
+              const items = json.data;
+              // If ctbDirection is known and matches entries with eta, prefer it; otherwise accept all at this stop pole
+              const dirFiltered = route.ctbDirection
+                ? items.filter((it: any) => !it.dir || it.dir === route.ctbDirection)
+                : items;
+              const candidates = dirFiltered.some((it: any) => Boolean(it.eta))
+                ? dirFiltered
+                : items;
+
+              for (const item of candidates) {
                 if (item.eta) {
                   const mins = parseMinutesDiff(item.eta);
                   if (mins !== null) {
                     validEtas.push({
                       etaMinutes: mins,
                       etaTimeStr: formatHHMM(item.eta),
-                      remark: item.rmk_tc ? `城巴 · ${item.rmk_tc}` : '城巴實時',
+                      remark: item.rmk_tc ? `城巴 · ${item.rmk_tc}` : '城巴班次',
                       isRealTime: true,
                       timestamp: item.eta,
                       operatorLabel: '城巴',
@@ -106,12 +147,15 @@ export async function fetchRouteETAs(matched: MatchedRoute): Promise<RouteETA[]>
       await Promise.all(fetchPromises);
     } else if (route.operator === 'CTB') {
       const ctbUrl = `https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/${originStop.stopId}/${route.routeNumber}`;
-      const res = await fetch(ctbUrl, { signal: AbortSignal.timeout(4500) });
+      const res = await fetch(ctbUrl, { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json.data)) {
-          for (const item of json.data) {
-            if (item.dir && item.dir !== route.direction) continue;
+          const items = json.data;
+          const dirFiltered = items.filter((it: any) => !it.dir || it.dir === route.direction);
+          const candidates = dirFiltered.some((it: any) => Boolean(it.eta)) ? dirFiltered : items;
+
+          for (const item of candidates) {
             if (item.eta) {
               const mins = parseMinutesDiff(item.eta);
               if (mins !== null) {

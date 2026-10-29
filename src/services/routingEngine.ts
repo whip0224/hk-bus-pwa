@@ -179,8 +179,18 @@ export function findMatchingRoutes(
     }
   }
 
-  // Primary Sort: Closest departure stop (最近出發地優先)
+  // Primary Sort: Regular daytime routes first (during 05:30-23:50), then closest departure stop
+  const currentHour = new Date().getHours();
+  const isDaytime = currentHour >= 5 && currentHour <= 23;
+
   finalMatches.sort((a, b) => {
+    if (isDaytime) {
+      const isNightA = /^(N|NA)\d/i.test(a.route.routeNumber);
+      const isNightB = /^(N|NA)\d/i.test(b.route.routeNumber);
+      if (isNightA !== isNightB) {
+        return isNightA ? 1 : -1;
+      }
+    }
     if (a.originDistanceMeters !== b.originDistanceMeters) {
       return a.originDistanceMeters - b.originDistanceMeters;
     }
