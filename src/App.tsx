@@ -9,6 +9,7 @@ import {
   WifiOff,
   CheckCircle2,
   Loader2,
+  Type,
 } from 'lucide-react';
 import {
   LocationPoint,
@@ -16,12 +17,17 @@ import {
   RouteSearchResult,
   SavedTrip,
   MapAppPreference,
+  FontSizePreference,
   RouteDefinition,
 } from './types/transit';
 import { findMatchingRoutes } from './services/routingEngine';
 import { fetchRouteETAs, partitionTop5AndRemaining } from './services/etaService';
 import { getSavedMapPreference, setSavedMapPreference } from './services/mapNavigator';
-import { getSavedTrips } from './services/storageService';
+import {
+  getSavedTrips,
+  getSavedFontSizePreference,
+  setSavedFontSizePreference,
+} from './services/storageService';
 import { searchLocations } from './services/geoService';
 import { syncRealTransitDatabase, getActiveRoutes } from './services/openDataSync';
 
@@ -38,25 +44,9 @@ const INITIAL_ETA_BATCH_SIZE = 16;
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');
 
-  // Verified real coordinates:
-  // 觀塘官立小學: 九龍觀塘牛頭角道240號 (22.31632, 114.21788)
-  // 九龍灣學生健康服務中心: 九龍九龍灣啟仁街9號九龍灣健康中心 (22.32835, 114.20825)
-  const [origin, setOrigin] = useState<LocationPoint | null>({
-    name: '觀塘官立小學',
-    address: '九龍觀塘牛頭角道240號 (近牛頭角下邨)',
-    lat: 22.31632,
-    lng: 114.21788,
-    source: 'preset',
-  });
-
-  const [dest, setDest] = useState<LocationPoint | null>({
-    name: '九龍灣學生健康服務中心',
-    address: '九龍九龍灣啟仁街9號九龍灣健康中心 (近啟業邨 / 麗晶花園)',
-    lat: 22.32835,
-    lng: 114.20825,
-    source: 'preset',
-  });
-
+  // Start with empty origin and destination by default
+  const [origin, setOrigin] = useState<LocationPoint | null>(null);
+  const [dest, setDest] = useState<LocationPoint | null>(null);
   const [radius, setRadius] = useState<number>(350);
 
   // Database Sync state
@@ -76,11 +66,17 @@ export default function App() {
 
   // Preferences & Counters
   const [mapPref, setMapPref] = useState<MapAppPreference>(getSavedMapPreference());
+  const [fontSizePref, setFontSizePref] = useState<FontSizePreference>(getSavedFontSizePreference());
   const [savedTripsCount, setSavedTripsCount] = useState<number>(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
+
+  // Apply root font size preference on mount and change
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font-size', fontSizePref);
+  }, [fontSizePref]);
 
   const showNotification = (msg: string) => {
     setToastMessage(msg);
@@ -247,7 +243,7 @@ export default function App() {
     [origin, dest, radius]
   );
 
-  // Sync Real HK Open Data on initial mount and run search
+  // Sync Real HK Open Data on initial mount (without forcing an automatic search)
   useEffect(() => {
     refreshSavedCount();
 
@@ -258,10 +254,6 @@ export default function App() {
       if (!mounted) return;
       setTotalSyncedRoutes(syncedRoutes.length);
       setIsSyncingDb(false);
-
-      if (origin && dest) {
-        await executeSearch(origin, dest, radius, syncedRoutes, true);
-      }
     })();
 
     const onOnline = () => setIsOnline(true);
@@ -293,6 +285,23 @@ export default function App() {
   const handleMapPrefChange = (pref: MapAppPreference) => {
     setMapPref(pref);
     setSavedMapPreference(pref);
+  };
+
+  const handleFontSizeChange = (size: FontSizePreference) => {
+    setFontSizePref(size);
+    setSavedFontSizePreference(size);
+  };
+
+  const cycleFontSize = () => {
+    const order: FontSizePreference[] = ['normal', 'large', 'xlarge'];
+    const labels: Record<FontSizePreference, string> = {
+      normal: '標準字體',
+      large: '大字體',
+      xlarge: '加大字體',
+    };
+    const next = order[(order.indexOf(fontSizePref) + 1) % order.length];
+    handleFontSizeChange(next);
+    showNotification(`已切換為「${labels[next]}」`);
   };
 
   // Refresh ETAs routine: refreshes Top 5 + any already-loaded routes in remainingRoutes,
@@ -336,20 +345,23 @@ export default function App() {
     executeSearch(trip.origin, trip.dest, trip.radius, getActiveRoutes(), true);
   };
 
+  const fontSizeBadgeLabel =
+    fontSizePref === 'xlarge' ? '加大' : fontSizePref === 'large' ? '大' : '標準';
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased">
       {/* Top Mobile App Bar — padded below iPhone Status Bar & Dynamic Island */}
       <header className="sticky top-0 z-30 pt-safe-header bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs shrink-0">
               <Bus className="w-4 h-4" />
             </div>
-            <div>
-              <h1 className="text-base font-bold tracking-tight text-slate-900 dark:text-white leading-none">
+            <div className="min-w-0">
+              <h1 className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-white leading-none truncate">
                 香港乘車易
               </h1>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                 {isSyncingDb
                   ? '正在同步香港運輸署真實路線庫...'
                   : totalSyncedRoutes > 100
@@ -359,7 +371,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             {isSyncingDb && (
               <span className="flex items-center gap-1 text-[11px] font-medium text-blue-600 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-lg">
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -369,9 +381,18 @@ export default function App() {
             {!isOnline && (
               <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded-lg border border-amber-200">
                 <WifiOff className="w-3 h-3" />
-                離線模式
+                離線
               </span>
             )}
+            <button
+              type="button"
+              onClick={cycleFontSize}
+              title="切換字體大小 (標準 / 大 / 加大)"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition active:scale-95"
+            >
+              <Type className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>{fontSizeBadgeLabel}</span>
+            </button>
             <PWAInstallGuide />
           </div>
         </div>
@@ -418,6 +439,16 @@ export default function App() {
             onSelectTrip={handleSelectSavedTrip}
             mapPref={mapPref}
             onMapPrefChange={handleMapPrefChange}
+            fontSizePref={fontSizePref}
+            onFontSizeChange={(size) => {
+              handleFontSizeChange(size);
+              const labels: Record<FontSizePreference, string> = {
+                normal: '標準字體',
+                large: '大字體',
+                xlarge: '加大字體',
+              };
+              showNotification(`已切換為「${labels[size]}」`);
+            }}
             onDbSynced={(count) => setTotalSyncedRoutes(count)}
             onNotify={(msg) => {
               showNotification(msg);

@@ -12,8 +12,14 @@ import {
   Layers,
   Settings2,
   Loader2,
+  Type,
 } from 'lucide-react';
-import { SavedTrip, SavedDestination, MapAppPreference } from '../types/transit';
+import {
+  SavedTrip,
+  SavedDestination,
+  MapAppPreference,
+  FontSizePreference,
+} from '../types/transit';
 import {
   getSavedTrips,
   renameTrip,
@@ -30,6 +36,8 @@ interface SavedTabProps {
   onSelectTrip: (trip: SavedTrip) => void;
   mapPref: MapAppPreference;
   onMapPrefChange: (pref: MapAppPreference) => void;
+  fontSizePref: FontSizePreference;
+  onFontSizeChange: (size: FontSizePreference) => void;
   onDbSynced: (routesCount: number) => void;
   onNotify: (msg: string) => void;
 }
@@ -38,6 +46,8 @@ export const SavedTab: React.FC<SavedTabProps> = ({
   onSelectTrip,
   mapPref,
   onMapPrefChange,
+  fontSizePref,
+  onFontSizeChange,
   onDbSynced,
   onNotify,
 }) => {
@@ -218,7 +228,43 @@ export const SavedTab: React.FC<SavedTabProps> = ({
         </div>
       </div>
 
-      {/* 3. 地圖導航偏好設定 */}
+      {/* 3. 字體大小設定 (標準 / 大 / 加大) */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Type className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+              畫面字體大小設定
+            </h4>
+          </div>
+          <span className="text-[11px] text-slate-400">亦可隨時點頂部按鈕切換</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {(
+            [
+              { key: 'normal', title: '標準', sub: '預設大小' },
+              { key: 'large', title: '大', sub: '放大 12%' },
+              { key: 'xlarge', title: '加大', sub: '放大 22%' },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onFontSizeChange(item.key)}
+              className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-0.5 ${
+                fontSizePref === item.key
+                  ? 'bg-blue-50 dark:bg-blue-950/60 border-blue-400 text-blue-700 dark:text-blue-300 font-semibold'
+                  : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <span className="text-xs font-bold">{item.title}</span>
+              <span className="text-[10px] text-slate-400">{item.sub}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. 地圖導航偏好設定 */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

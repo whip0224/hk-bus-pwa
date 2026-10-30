@@ -5,6 +5,20 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     overscroll-behavior-y: none;
+    font-size: 16px;
+    transition: font-size 120ms ease-out;
+  }
+
+  html[data-font-size="normal"] {
+    font-size: 16px;
+  }
+
+  html[data-font-size="large"] {
+    font-size: 18px;
+  }
+
+  html[data-font-size="xlarge"] {
+    font-size: 19.5px;
   }
 
   body {

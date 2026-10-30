@@ -196,6 +196,7 @@ const VirtualizedRouteCard: React.FC<VirtualizedRouteCardProps> = ({
   const walkMin = estimateWalkMinutes(originDistanceMeters);
   const firstEta = etas?.[0];
   const secondEta = etas?.[1];
+  const thirdEta = etas?.[2];
 
   // Lightweight virtualized placeholder when scrolled far outside viewport
   if (!isTop5 && !isNearViewport) {
@@ -230,8 +231,8 @@ const VirtualizedRouteCard: React.FC<VirtualizedRouteCardProps> = ({
       }`}
     >
       {/* Header: Route Number, Operator, Real-time Fastest ETA */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-2xl font-black font-mono tracking-tight text-slate-900 dark:text-white">
             {route.routeNumber}
           </span>
@@ -239,11 +240,11 @@ const VirtualizedRouteCard: React.FC<VirtualizedRouteCardProps> = ({
         </div>
 
         {/* Live ETA Status */}
-        <div className="text-right">
+        <div className="text-right shrink-0">
           {isEtaPending ? (
             <div className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-medium bg-blue-50/80 dark:bg-blue-950/50 px-2.5 py-1 rounded-lg">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>捲動載入實時 ETA...</span>
+              <span>載入實時 ETA...</span>
             </div>
           ) : firstEta && firstEta.etaMinutes !== null ? (
             <div className="flex flex-col items-end">
@@ -287,35 +288,73 @@ const VirtualizedRouteCard: React.FC<VirtualizedRouteCardProps> = ({
         )}
       </p>
 
-      {/* Fastest 2 Upcoming Departures (正在到站時間, 下一班到站時間) */}
-      <div className="grid grid-cols-2 gap-2 mt-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-2">
-          <Clock className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-          <div>
-            <div className="text-[10px] text-slate-400">即將到站 (首班)</div>
-            <div className="text-xs font-bold font-mono text-slate-800 dark:text-slate-200 tabular-nums">
-              {isEtaPending
-                ? '讀取實時班次中...'
-                : firstEta && firstEta.etaMinutes !== null
-                ? firstEta.etaMinutes <= 1
-                  ? `正在到站 (${firstEta.etaTimeStr})`
-                  : `${firstEta.etaMinutes} 分鐘 (${firstEta.etaTimeStr})`
-                : '暫無實時班次'}
-            </div>
+      {/* Fastest 3 Upcoming Departures (首班, 第二班, 第三班) */}
+      <div className="grid grid-cols-3 gap-1.5 mt-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+        {/* 1st Departure */}
+        <div className="min-w-0">
+          <div className="flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span className="truncate">首班到站</span>
+          </div>
+          <div className="text-xs font-bold font-mono text-slate-900 dark:text-slate-100 tabular-nums mt-0.5 leading-snug">
+            {isEtaPending ? (
+              <span className="text-slate-400">讀取中...</span>
+            ) : firstEta && firstEta.etaMinutes !== null ? (
+              <>
+                <span className={firstEta.etaMinutes <= 1 ? 'text-red-600 dark:text-red-400' : ''}>
+                  {firstEta.etaMinutes <= 1 ? '正在到站' : `${firstEta.etaMinutes} 分鐘`}
+                </span>
+                <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                  {firstEta.etaTimeStr}
+                </div>
+              </>
+            ) : (
+              <span className="text-slate-400 font-normal">暫無班次</span>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 border-l border-slate-200/80 dark:border-slate-700/80 pl-2">
-          <Clock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-          <div>
-            <div className="text-[10px] text-slate-400">下一班次</div>
-            <div className="text-xs font-bold font-mono text-slate-800 dark:text-slate-200 tabular-nums">
-              {isEtaPending
-                ? '待載入...'
-                : secondEta && secondEta.etaMinutes !== null
-                ? `${secondEta.etaMinutes} 分鐘 (${secondEta.etaTimeStr})`
-                : '暫無後續班次'}
-            </div>
+        {/* 2nd Departure */}
+        <div className="border-l border-slate-200/80 dark:border-slate-700/80 pl-2 min-w-0">
+          <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span className="truncate">第二班次</span>
+          </div>
+          <div className="text-xs font-bold font-mono text-slate-800 dark:text-slate-200 tabular-nums mt-0.5 leading-snug">
+            {isEtaPending ? (
+              <span className="text-slate-400">待載入...</span>
+            ) : secondEta && secondEta.etaMinutes !== null ? (
+              <>
+                <span>{secondEta.etaMinutes} 分鐘</span>
+                <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                  {secondEta.etaTimeStr}
+                </div>
+              </>
+            ) : (
+              <span className="text-slate-400 font-normal">暫無後續</span>
+            )}
+          </div>
+        </div>
+
+        {/* 3rd Departure */}
+        <div className="border-l border-slate-200/80 dark:border-slate-700/80 pl-2 min-w-0">
+          <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span className="truncate">第三班次</span>
+          </div>
+          <div className="text-xs font-bold font-mono text-slate-800 dark:text-slate-200 tabular-nums mt-0.5 leading-snug">
+            {isEtaPending ? (
+              <span className="text-slate-400">待載入...</span>
+            ) : thirdEta && thirdEta.etaMinutes !== null ? (
+              <>
+                <span>{thirdEta.etaMinutes} 分鐘</span>
+                <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                  {thirdEta.etaTimeStr}
+                </div>
+              </>
+            ) : (
+              <span className="text-slate-400 font-normal">暫無後續</span>
+            )}
           </div>
         </div>
       </div>

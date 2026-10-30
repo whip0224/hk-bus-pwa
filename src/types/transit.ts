@@ -92,3 +92,6 @@ export interface SavedDestination {
 }
 
 export type MapAppPreference = 'google' | 'apple';
+
+export type FontSizePreference = 'normal' | 'large' | 'xlarge';
+

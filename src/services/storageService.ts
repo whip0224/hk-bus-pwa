@@ -1,8 +1,25 @@
-import { SavedTrip, SavedDestination, LocationPoint } from '../types/transit';
+import { SavedTrip, SavedDestination, LocationPoint, FontSizePreference } from '../types/transit';
 
 const SAVED_TRIPS_KEY = 'hk_transit_saved_trips_v2';
 const SAVED_DESTINATIONS_KEY = 'hk_transit_saved_destinations_v2';
 const OFFLINE_DB_STATUS_KEY = 'hk_transit_offline_db_v2';
+const FONT_SIZE_PREF_KEY = 'hk_transit_font_size_v1';
+
+export function getSavedFontSizePreference(): FontSizePreference {
+  try {
+    const val = localStorage.getItem(FONT_SIZE_PREF_KEY);
+    if (val === 'normal' || val === 'large' || val === 'xlarge') {
+      return val;
+    }
+  } catch {}
+  return 'normal';
+}
+
+export function setSavedFontSizePreference(pref: FontSizePreference): void {
+  try {
+    localStorage.setItem(FONT_SIZE_PREF_KEY, pref);
+  } catch {}
+}
 
 // Verified real coordinates for default saved destinations
 const DEFAULT_SAVED_DESTINATIONS: SavedDestination[] = [
